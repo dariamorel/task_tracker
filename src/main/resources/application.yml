@@ -1,0 +1,16 @@
+# Only maps environment variables to Spring properties; no environment-specific values here.
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+
+spring:
+  datasource:
+    url: ${DATABASE_URL}
+    username: ${DATABASE_USER}
+    password: ${DATABASE_PASSWORD}
+    hikari:
+      maximum-pool-size: 10
+      # don't fail on startup if the database is not reachable yet
+      initialization-fail-timeout: -1
+  lifecycle:
+    timeout-per-shutdown-phase: 10s

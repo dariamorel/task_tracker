@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Task Tracker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="bg"></div>
+<main class="shell">
+    <header class="hero">
+        <p class="brand">Task Tracker</p>
+        <h1>Задачи</h1>
+        <p class="lead">Создавайте задачи, выставляйте приоритет и помечайте тегами.</p>
+    </header>
+
+    <p id="error" class="error" hidden></p>
+
+    <form id="task-form" class="composer">
+        <input type="text" name="title" placeholder="Новая задача…" required autocomplete="off">
+        <div class="composer-row">
+            <label class="field">
+                <span>Приоритет</span>
+                <select name="priority">
+                    <option value="LOW">Низкий</option>
+                    <option value="MEDIUM" selected>Средний</option>
+                    <option value="HIGH">Высокий</option>
+                </select>
+            </label>
+            <label class="field tag-field">
+                <span>Тег</span>
+                <div class="tag-picker" data-picker="create">
+                    <select name="tagId" class="tag-select">
+                        <option value="">Без тега</option>
+                    </select>
+                    <button type="button" class="btn-ghost tag-add" title="Добавить тег">+</button>
+                    <button type="button" class="icon-btn tag-edit" title="Переименовать тег"></button>
+                    <button type="button" class="icon-btn danger tag-delete" title="Удалить тег"></button>
+                </div>
+            </label>
+            <button type="submit" class="btn-primary">Добавить</button>
+        </div>
+    </form>
+
+    <section id="tasks" class="task-list" aria-live="polite"></section>
+</main>
+
+<dialog id="edit-dialog">
+    <form method="dialog" id="edit-form" class="dialog-card">
+        <h2>Изменить задачу</h2>
+        <input type="hidden" name="id">
+        <label class="field">
+            <span>Название</span>
+            <input type="text" name="title" required>
+        </label>
+        <label class="field">
+            <span>Приоритет</span>
+            <select name="priority">
+                <option value="LOW">Низкий</option>
+                <option value="MEDIUM">Средний</option>
+                <option value="HIGH">Высокий</option>
+            </select>
+        </label>
+        <label class="field">
+            <span>Тег</span>
+            <div class="tag-picker" data-picker="edit">
+                <select name="tagId" class="tag-select">
+                    <option value="">Без тега</option>
+                </select>
+                <button type="button" class="btn-ghost tag-add" title="Добавить тег">+</button>
+                <button type="button" class="icon-btn tag-edit" title="Переименовать тег"></button>
+                <button type="button" class="icon-btn danger tag-delete" title="Удалить тег"></button>
+            </div>
+        </label>
+        <div class="dialog-actions">
+            <button type="button" class="btn-ghost" id="edit-cancel">Отмена</button>
+            <button type="submit" class="btn-primary">Сохранить</button>
+        </div>
+    </form>
+</dialog>
+
+<script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: tracker
+      POSTGRES_USER: tracker
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tracker -d tracker"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    image: task-tracker:${APP_VERSION:-latest}
+    build: .
+    command: ["ru.hse.tracker.MigrateKt"]
+    environment: &appenv
+      PORT: 8080
+      DATABASE_URL: jdbc:postgresql://db:5432/tracker
+      DATABASE_USER: tracker
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+    depends_on:
+      db: { condition: service_healthy }
+
+  app:
+    image: task-tracker:${APP_VERSION:-latest}
+    environment: *appenv
+    ports: ["8080:8080"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+volumes:
+  pgdata:
