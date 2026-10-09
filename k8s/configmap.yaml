@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tracker-config
+  namespace: task-tracker
+data:
+  PORT: "8080"
+  POSTGRES_DB: tracker
+  POSTGRES_USER: tracker
+  DATABASE_URL: jdbc:postgresql://postgres:5432/tracker
+  DATABASE_USER: tracker

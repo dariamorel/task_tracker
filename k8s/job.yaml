@@ -1,0 +1,20 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: tracker-migrate
+  namespace: task-tracker
+spec:
+  template:
+    spec:
+      containers:
+      - name: migrate
+        image: task-tracker:1.0.0
+        imagePullPolicy: Never
+        command: ["java", "-cp", "/app/lib/*", "ru.hse.tracker.MigrateKt"]
+        envFrom:
+        - configMapRef:
+            name: tracker-config
+        - secretRef:
+            name: tracker-secret
+      restartPolicy: Never
+  backoffLimit: 4
