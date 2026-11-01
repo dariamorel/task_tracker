@@ -1,0 +1,23 @@
+<configuration>
+    <springProperty scope="context" name="POD_NAME" source="k8s.pod.name" defaultValue="local"/>
+    <springProperty scope="context" name="DEPLOY_ENV" source="deployment.environment.name" defaultValue="local"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeContext>false</includeContext>
+            <timeZone>UTC</timeZone>
+            <timestampPattern>yyyy-MM-dd'T'HH:mm:ss.SSS'Z'</timestampPattern>
+            <fieldNames>
+                <timestamp>timestamp</timestamp>
+                <version>[ignore]</version>
+                <levelValue>[ignore]</levelValue>
+                <stackTrace>error.stack</stackTrace>
+            </fieldNames>
+            <customFields>{"service.name":"tracker-app","service.version":"1.0.0","deployment.environment.name":"${DEPLOY_ENV}","k8s.pod.name":"${POD_NAME}"}</customFields>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

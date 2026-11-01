@@ -1,6 +1,6 @@
 package ru.hse.tracker
 
-import org.slf4j.LoggerFactory
+import jakarta.servlet.http.HttpServletRequest
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus
 import org.springframework.http.converter.HttpMessageNotReadableException
@@ -83,32 +83,50 @@ class TaskController(private val repo: TaskRepository) {
 
 @RestControllerAdvice
 class ErrorHandler {
-    private val log = LoggerFactory.getLogger(javaClass)
-
     @ExceptionHandler
     @ResponseStatus(HttpStatus.NOT_FOUND)
-    fun notFound(e: NotFoundException) = ErrorResponse(e.message ?: "not found")
+    fun notFound(e: NotFoundException, request: HttpServletRequest): ErrorResponse {
+        val message = e.message ?: "not found"
+        logRequest(request, HttpStatus.NOT_FOUND.value(), message)
+        return ErrorResponse(message)
+    }
 
     @ExceptionHandler
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    fun badRequest(e: IllegalArgumentException) = ErrorResponse(e.message ?: "bad request")
+    fun badRequest(e: IllegalArgumentException, request: HttpServletRequest): ErrorResponse {
+        val message = e.message ?: "bad request"
+        logRequest(request, HttpStatus.BAD_REQUEST.value(), message)
+        return ErrorResponse(message)
+    }
 
     @ExceptionHandler
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    fun badParam(e: MethodArgumentTypeMismatchException) = ErrorResponse("${e.name} must be an integer")
+    fun badParam(e: MethodArgumentTypeMismatchException, request: HttpServletRequest): ErrorResponse {
+        val message = "${e.name} must be an integer"
+        logRequest(request, HttpStatus.BAD_REQUEST.value(), message)
+        return ErrorResponse(message)
+    }
 
     @ExceptionHandler
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    fun badBody(e: HttpMessageNotReadableException) = ErrorResponse("invalid request body")
+    fun badBody(e: HttpMessageNotReadableException, request: HttpServletRequest): ErrorResponse {
+        val message = "invalid request body"
+        logRequest(request, HttpStatus.BAD_REQUEST.value(), message)
+        return ErrorResponse(message)
+    }
 
     @ExceptionHandler
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    fun constraint(e: DataIntegrityViolationException) = ErrorResponse("constraint violation")
+    fun constraint(e: DataIntegrityViolationException, request: HttpServletRequest): ErrorResponse {
+        val message = "constraint violation"
+        logRequest(request, HttpStatus.BAD_REQUEST.value(), message)
+        return ErrorResponse(message)
+    }
 
     @ExceptionHandler
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-    fun unexpected(e: Exception): ErrorResponse {
-        log.error("Unhandled error", e)
+    fun unexpected(e: Exception, request: HttpServletRequest): ErrorResponse {
+        logRequest(request, HttpStatus.INTERNAL_SERVER_ERROR.value(), e.message ?: "internal error", e)
         return ErrorResponse("internal error")
     }
 }
