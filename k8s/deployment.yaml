@@ -55,6 +55,13 @@ spec:
         imagePullPolicy: Never
         ports:
         - containerPort: 8080
+        env:
+        - name: K8S_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: DEPLOYMENT_ENVIRONMENT_NAME
+          value: minikube
         envFrom:
         - configMapRef:
             name: tracker-config
