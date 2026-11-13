@@ -1,35 +1,16 @@
+# Only maps environment variables to Spring properties; no environment-specific values here.
 server:
   port: ${PORT:8080}
   shutdown: graceful
-  tomcat:
-    mbeanregistry:
-      enabled: true
-
-management:
-  server:
-    port: 8081
-  endpoints:
-    web:
-      exposure:
-        include: health,prometheus
-  metrics:
-    tags:
-      application: tracker-app
-    distribution:
-      percentiles-histogram:
-        http.server.requests: true
-      slo:
-        http.server.requests: 100ms,300ms,500ms,1s
 
 spring:
-  application:
-    name: tracker-app
   datasource:
     url: ${DATABASE_URL}
     username: ${DATABASE_USER}
     password: ${DATABASE_PASSWORD}
     hikari:
       maximum-pool-size: 10
+      # don't fail on startup if the database is not reachable yet
       initialization-fail-timeout: -1
   lifecycle:
     timeout-per-shutdown-phase: 10s

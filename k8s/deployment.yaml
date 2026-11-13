@@ -12,10 +12,6 @@ spec:
     metadata:
       labels:
         app: postgres
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "9187"
-        prometheus.io/path: "/metrics"
     spec:
       containers:
       - name: postgres
@@ -33,26 +29,6 @@ spec:
         volumeMounts:
         - name: data
           mountPath: /var/lib/postgresql/data
-      - name: postgres-exporter
-        image: prometheuscommunity/postgres-exporter:v0.16.0
-        args:
-        - --no-collector.stat_statements
-        ports:
-        - name: metrics
-          containerPort: 9187
-        env:
-        - name: DATA_SOURCE_URI
-          value: localhost:5432/tracker?sslmode=disable
-        - name: DATA_SOURCE_USER
-          valueFrom:
-            configMapKeyRef:
-              name: tracker-config
-              key: POSTGRES_USER
-        - name: DATA_SOURCE_PASS
-          valueFrom:
-            secretKeyRef:
-              name: tracker-secret
-              key: POSTGRES_PASSWORD
       volumes:
       - name: data
         persistentVolumeClaim:
@@ -72,20 +48,13 @@ spec:
     metadata:
       labels:
         app: tracker-app
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "8081"
-        prometheus.io/path: "/actuator/prometheus"
     spec:
       containers:
       - name: app
         image: task-tracker:1.0.0
         imagePullPolicy: Never
         ports:
-        - name: http
-          containerPort: 8080
-        - name: metrics
-          containerPort: 8081
+        - containerPort: 8080
         env:
         - name: K8S_POD_NAME
           valueFrom:
