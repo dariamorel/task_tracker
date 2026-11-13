@@ -53,7 +53,10 @@ class TagController(private val repo: TagRepository) {
 
 @RestController
 @RequestMapping("/api/v1/tasks")
-class TaskController(private val repo: TaskRepository) {
+class TaskController(
+    private val repo: TaskRepository,
+    private val metrics: AppMetrics,
+) {
 
     @GetMapping
     fun list(@RequestParam(required = false) tagId: Long?) = repo.findAll(tagId)
@@ -65,19 +68,35 @@ class TaskController(private val repo: TaskRepository) {
     @ResponseStatus(HttpStatus.CREATED)
     fun create(@RequestBody body: Task): Task {
         body.requireValid()
-        return repo.create(body)
+        val created = metrics.recordSave { repo.create(body) }
+        metrics.taskCreated()
+        if (created.done) metrics.recordCompletion(created.createdAt!!)
+        else metrics.taskOpened()
+        return created
     }
 
     @PutMapping("/{id}")
     fun update(@PathVariable id: Long, @RequestBody body: Task): Task {
         body.requireValid()
-        return repo.update(id, body) ?: throw NotFoundException("task $id not found")
+        val before = repo.findById(id) ?: throw NotFoundException("task $id not found")
+        val saved = metrics.recordSave {
+            repo.update(id, body) ?: throw NotFoundException("task $id not found")
+        }
+        if (!before.done && saved.done) {
+            metrics.recordCompletion(before.createdAt!!)
+            metrics.taskClosed()
+        } else if (before.done && !saved.done) {
+            metrics.taskOpened()
+        }
+        return saved
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun delete(@PathVariable id: Long) {
+        val existing = repo.findById(id) ?: throw NotFoundException("task $id not found")
         if (!repo.delete(id)) throw NotFoundException("task $id not found")
+        if (!existing.done) metrics.taskClosed()
     }
 }
 
