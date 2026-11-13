@@ -1,0 +1,128 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vmagent
+  namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: vmagent
+rules:
+- apiGroups: [""]
+  resources: ["nodes", "nodes/proxy", "nodes/metrics", "services", "endpoints", "pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vmagent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: vmagent
+subjects:
+- kind: ServiceAccount
+  name: vmagent
+  namespace: monitoring
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vmagent-config
+  namespace: monitoring
+data:
+  scrape.yml: |
+    global:
+      scrape_interval: 15s
+      scrape_timeout: 10s
+    scrape_configs:
+    - job_name: kubernetes-pods
+      kubernetes_sd_configs:
+      - role: pod
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port, __meta_kubernetes_pod_container_port_number]
+        action: keep
+        regex: (\d+);\1
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_(.+)
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: replace
+        target_label: pod
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vmagent-scrape-note
+  namespace: monitoring
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vm-single-victoria-metrics-agent
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vmagent
+  template:
+    metadata:
+      labels:
+        app: vmagent
+    spec:
+      serviceAccountName: vmagent
+      containers:
+      - name: vmagent
+        image: victoriametrics/vmagent:v1.110.0
+        args:
+        - -promscrape.config=/etc/vmagent/scrape.yml
+        - -remoteWrite.url=http://vm-single-victoria-metrics-single-server.monitoring.svc:8428/api/v1/write
+        - -httpListenAddr=:8429
+        ports:
+        - name: http
+          containerPort: 8429
+        volumeMounts:
+        - name: config
+          mountPath: /etc/vmagent
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: vmagent-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vm-single-victoria-metrics-agent
+  namespace: monitoring
+spec:
+  selector:
+    app: vmagent
+  ports:
+  - name: http
+    port: 8429
+    targetPort: http
