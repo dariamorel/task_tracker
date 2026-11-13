@@ -20,5 +20,8 @@ kubectl -n "$NS" wait --for=condition=complete job/tracker-migrate --timeout=180
 
 kubectl -n "$NS" rollout status deployment/tracker-app --timeout=180s
 
+kubectl apply -f "$ROOT/prober.yaml"
+kubectl -n "$NS" rollout status deployment/prober --timeout=180s
+
 kubectl -n "$NS" get pods -o wide
 kubectl -n "$NS" get svc
