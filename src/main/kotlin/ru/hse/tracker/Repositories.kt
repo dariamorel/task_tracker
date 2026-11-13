@@ -45,7 +45,7 @@ class TaskRepository(private val jdbc: JdbcClient) {
 
     fun findAll(tagId: Long?): List<Task> {
         val sql = buildString {
-            append("SELECT id, title, done, priority, tag_id, created_at FROM tasks")
+            append("SELECT id, title, done, priority, tag_id FROM tasks")
             if (tagId != null) append(" WHERE tag_id = :tagId")
             append(" ORDER BY CASE priority WHEN 'HIGH' THEN 0 WHEN 'MEDIUM' THEN 1 ELSE 2 END, id")
         }
@@ -55,54 +55,42 @@ class TaskRepository(private val jdbc: JdbcClient) {
     }
 
     fun findById(id: Long): Task? =
-        jdbc.sql("SELECT id, title, done, priority, tag_id, created_at FROM tasks WHERE id = :id")
+        jdbc.sql("SELECT id, title, done, priority, tag_id FROM tasks WHERE id = :id")
             .param("id", id)
             .query { rs, _ -> rs.toTask() }
             .optional().orElse(null)
 
-    fun countOpen(): Long =
-        jdbc.sql("SELECT count(*) FROM tasks WHERE done = false")
+    fun create(t: Task): Task {
+        val id = jdbc.sql(
+            "INSERT INTO tasks (title, done, priority, tag_id) VALUES (:title, :done, :priority, :tagId) RETURNING id"
+        )
+            .param("title", t.title)
+            .param("done", t.done)
+            .param("priority", t.priority)
+            .param("tagId", t.tagId)
             .query(Long::class.java)
             .single()
+        return t.copy(id = id)
+    }
 
-    fun create(t: Task): Task =
-        jdbc.sql(
-            """
-            INSERT INTO tasks (title, done, priority, tag_id)
-            VALUES (:title, :done, :priority, :tagId)
-            RETURNING id, title, done, priority, tag_id, created_at
-            """.trimIndent()
-        )
-            .param("title", t.title)
-            .param("done", t.done)
-            .param("priority", t.priority)
-            .param("tagId", t.tagId)
-            .query { rs, _ -> rs.toTask() }
-            .single()
-
-    fun update(id: Long, t: Task): Task? =
-        jdbc.sql(
-            """
-            UPDATE tasks
-            SET title = :title, done = :done, priority = :priority, tag_id = :tagId
-            WHERE id = :id
-            RETURNING id, title, done, priority, tag_id, created_at
-            """.trimIndent()
+    fun update(id: Long, t: Task): Task? {
+        val updated = jdbc.sql(
+            "UPDATE tasks SET title = :title, done = :done, priority = :priority, tag_id = :tagId WHERE id = :id"
         )
             .param("title", t.title)
             .param("done", t.done)
             .param("priority", t.priority)
             .param("tagId", t.tagId)
             .param("id", id)
-            .query { rs, _ -> rs.toTask() }
-            .optional().orElse(null)
+            .update()
+        return if (updated == 0) null else t.copy(id = id)
+    }
 
     fun delete(id: Long): Boolean =
         jdbc.sql("DELETE FROM tasks WHERE id = :id").param("id", id).update() > 0
 
     private fun ResultSet.toTask(): Task {
         val tagId = getObject("tag_id") as Long?
-        val createdAt = getObject("created_at", java.time.OffsetDateTime::class.java).toInstant()
-        return Task(getLong("id"), getString("title"), getBoolean("done"), getString("priority"), tagId, createdAt)
+        return Task(getLong("id"), getString("title"), getBoolean("done"), getString("priority"), tagId)
     }
 }
