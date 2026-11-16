@@ -1,0 +1,136 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: monitoring
+data:
+  alertmanager.yml.tmpl: |
+    route:
+      receiver: telegram
+      group_by: [alertname]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 1h
+    receivers:
+    - name: telegram
+      webhook_configs:
+      - url: http://127.0.0.1:8080/cgi-bin/notify
+        send_resolved: true
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: telegram-relay
+  namespace: monitoring
+data:
+  notify: |
+    #!/bin/sh
+    body=$(cat)
+    token=$(cat /secret/bot_token)
+    chat=$(cat /secret/chat_id)
+    text=$(printf '%s' "$body" | awk '
+    function dump(obj,    p, key, val, q) {
+      p = obj
+      while (match(p, /"[^"]+":"/)) {
+        key = substr(p, RSTART + 1, RLENGTH - 4)
+        p = substr(p, RSTART + RLENGTH)
+        q = index(p, "\"")
+        if (q < 1) break
+        val = substr(p, 1, q - 1)
+        print " - " key " = " val
+        p = substr(p, q + 1)
+      }
+    }
+    function between(s, a, b,    i, j) {
+      i = index(s, a)
+      if (i < 1) return ""
+      s = substr(s, i + length(a))
+      j = index(s, b)
+      if (j < 1) return s
+      return substr(s, 1, j - 1)
+    }
+    BEGIN { body = "" }
+    { body = body $0 }
+    END {
+      st = between(body, "\"status\":\"", "\"")
+      if (st == "resolved") print "Alerts Resolved:"
+      else print "Alerts Firing:"
+      print "Labels:"
+      dump(between(body, "\"labels\":{", "}"))
+      print "Annotations:"
+      dump(between(body, "\"annotations\":{", "}"))
+      src = between(body, "\"generatorURL\":\"", "\"")
+      gsub(/\\\//, "/", src)
+      print "Source: " src
+    }
+    ')
+    esc=$(printf '%s' "$text" | awk '{ gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); printf "%s\\n", $0 }')
+    wget -qO- --timeout=20 --header='Content-Type: application/json' \
+      --post-data="{\"chat_id\":\"$chat\",\"text\":\"$esc\"}" \
+      "https://api.telegram.org/bot${token}/sendMessage" >/dev/null
+    printf 'Status: 200\r\n\r\nOK\n'
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: alertmanager
+  template:
+    metadata:
+      labels:
+        app: alertmanager
+    spec:
+      containers:
+      - name: alertmanager
+        image: prom/alertmanager:v0.28.1
+        command: ["sh", "-c"]
+        args:
+        - |
+          cp /tmpl/alertmanager.yml.tmpl /tmp/alertmanager.yml
+          exec /bin/alertmanager --config.file=/tmp/alertmanager.yml --storage.path=/tmp/data
+        ports:
+        - name: http
+          containerPort: 9093
+        volumeMounts:
+        - name: config
+          mountPath: /tmpl
+          readOnly: true
+      - name: relay
+        image: prom/alertmanager:v0.28.1
+        command: ["httpd", "-f", "-p", "8080", "-h", "/www"]
+        volumeMounts:
+        - name: relay
+          mountPath: /www/cgi-bin
+          readOnly: true
+        - name: secret
+          mountPath: /secret
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: alertmanager-config
+      - name: relay
+        configMap:
+          name: telegram-relay
+          defaultMode: 0755
+      - name: secret
+        secret:
+          secretName: alertmanager-telegram
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager
+  namespace: monitoring
+spec:
+  selector:
+    app: alertmanager
+  ports:
+  - name: http
+    port: 9093
+    targetPort: http
