@@ -1,0 +1,109 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vmalert-rules
+  namespace: monitoring
+data:
+  alerts.yaml: |
+    groups:
+    - name: tracker
+      interval: 30s
+      rules:
+      - alert: TaskSaveSlow
+        expr: histogram_quantile(0.95, sum(rate(task_save_duration_seconds_bucket{namespace="task-tracker"}[5m])) by (le)) > 0.3
+        for: 5m
+        labels:
+          severity: warning
+          service: tracker-app
+        annotations:
+          summary: "Сохранение задачи дольше 0.3 с"
+          description: "95% сохранений за последние 5 минут длятся дольше 0.3 секунды."
+      - alert: TooManyOpenTasks
+        expr: max(tasks_open{namespace="task-tracker"}) > 20
+        for: 10m
+        labels:
+          severity: warning
+          service: tracker-app
+        annotations:
+          summary: "Открытых задач больше 20"
+          description: "Счетчик tasks_open держится выше 20 уже 10 минут."
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(http_server_requests_seconds_count{namespace="task-tracker",status="500"}[5m]))
+            /
+            sum(rate(http_server_requests_seconds_count{namespace="task-tracker"}[5m]))
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: tracker-app
+        annotations:
+          summary: "Доля ответов 500 выше 10%"
+          description: "За последние 5 минут больше 10% HTTP-ответов приложения имеют статус 500."
+      - alert: DbPoolExhausted
+        expr: |
+          (
+            sum(increase(hikaricp_connections_timeout_total{namespace="task-tracker"}[5m])) > 0
+          )
+          or
+          (
+            max(hikaricp_connections_pending{namespace="task-tracker"}) > 0
+          )
+        for: 2m
+        labels:
+          severity: critical
+          service: tracker-app
+        annotations:
+          summary: "Пул соединений с базой исчерпан"
+          description: "За 5 минут был таймаут получения соединения или есть запросы, которые ждут свободное соединение."
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vmalert
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vmalert
+  template:
+    metadata:
+      labels:
+        app: vmalert
+    spec:
+      containers:
+      - name: vmalert
+        image: victoriametrics/vmalert:v1.155.0
+        args:
+        - -rule=/rules/alerts.yaml
+        - -datasource.url=http://vm-single-victoria-metrics-single-server.monitoring.svc:8428
+        - -remoteRead.url=http://vm-single-victoria-metrics-single-server.monitoring.svc:8428
+        - -remoteWrite.url=http://vm-single-victoria-metrics-single-server.monitoring.svc:8428
+        - -notifier.url=http://alertmanager.monitoring.svc:9093
+        - -httpListenAddr=:8880
+        ports:
+        - name: http
+          containerPort: 8880
+        volumeMounts:
+        - name: rules
+          mountPath: /rules
+          readOnly: true
+      volumes:
+      - name: rules
+        configMap:
+          name: vmalert-rules
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vmalert
+  namespace: monitoring
+spec:
+  selector:
+    app: vmalert
+  ports:
+  - name: http
+    port: 8880
+    targetPort: http
